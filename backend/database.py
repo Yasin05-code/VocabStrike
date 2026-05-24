@@ -57,7 +57,6 @@ def init_db():
             
             enjekte_verisi = []
             
-            # Sözlükteki her bir seviye grubunu ("A1", "A2", "B1", "B2") tek tek dönüyoruz
             for seviye_anahtari, kelime_listesi in seviyeli_liste.items():
                 print(f"📦 {seviye_anahtari} kategorisinden kelimeler ayıklanıyor...")
                 

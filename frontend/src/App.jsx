@@ -642,7 +642,7 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <div className="bg-cyan-500/10 p-3 rounded-xl text-cyan-400 text-2xl group-hover:scale-110 duration-200">{leagueBadge}</div>
                   <div className="flex-1 w-full">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Mevcut Akademi Rütben</p>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Mevcut Rütben</p>
                     <p className={`text-lg ${leagueColorClass}`}>{leagueName}</p>
                   </div>
                 </div>
@@ -665,7 +665,7 @@ export default function App() {
             </div>
 
             <div className={`p-6 rounded-3xl border shadow-xl space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <h3 className="text-xs font-black uppercase tracking-wider">🎖 Imal Edilen Akademi Başarı Rozetleriniz</h3>
+              <h3 className="text-xs font-black uppercase tracking-wider">🎖 Kazandığınız Başarı Rozetleriniz</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {achievementsList.map((badge) => {
                   const isUnlocked = unlockedAchievements.includes(badge.id);
@@ -685,8 +685,8 @@ export default function App() {
             <div className={`rounded-3xl border shadow-xl overflow-hidden ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className={`p-5 border-b flex justify-between items-center ${darkMode ? 'bg-[#0f172a]/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <div>
-                  <h2 className="text-md font-black">🏆 MySQL Canlı Global Sıralama Arenası</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Sistemde kayıtlı tüm kullanıcıların anlık veritabanı skor listesi</p>
+                  <h2 className="text-md font-black">🏆 Canlı Global Sıralama</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Sistemde kayıtlı tüm kullanıcıların anlık skor listesi</p>
                 </div>
                 <div className="text-xs font-bold text-slate-400">Senin Sıran: <span className="text-cyan-400 font-black">#{myRank}</span></div>
               </div>
@@ -696,7 +696,7 @@ export default function App() {
                     <tr className={`border-b text-[10px] font-black text-slate-400 uppercase tracking-wider ${darkMode ? 'bg-[#0f172a]/20 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                       <th className="p-4 text-center w-16">Sıra</th>
                       <th className="p-4">Yazılımcı / Oyuncu</th>
-                      <th className="p-4 text-right">Veritabanı Toplam Skoru</th>
+                      <th className="p-4 text-right">Toplam Skor</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y text-xs font-bold ${darkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
@@ -729,7 +729,7 @@ export default function App() {
               </form>
             </div>
             <div className={`rounded-3xl border shadow-xl overflow-hidden ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="p-6 bg-[#0f172a]/40 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-sm font-black">📚 Aktif Zayıf Bellek Hücreleri</h2><span className="text-xs text-slate-400">Toplam: {hataKelimeleri.length} Kelime</span></div>
+              <div className="p-6 bg-[#0f172a]/40 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-sm font-black">📚 Aktif Zayıf Kelimeler</h2><span className="text-xs text-slate-400">Toplam: {hataKelimeleri.length} Kelime</span></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="bg-slate-900/10 text-[10px] text-slate-400 font-black border-b dark:border-slate-800"><th className="p-4">İngilizce</th><th className="p-4">Türkçe</th><th className="p-4">Seviye</th><th className="p-4 text-right">İşlem</th></tr></thead>
@@ -751,7 +751,7 @@ export default function App() {
         {activeTab === 'rehber' && (
           <div className="space-y-6">
             <div className={`p-8 rounded-3xl border shadow-xl ${darkMode ? 'bg-linear-to-br from-[#1e293b] to-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-center gap-3 mb-3"><Compass className="w-6 h-6 text-cyan-400" /><h2 className="text-2xl font-black">📖 Kelime Oyunu Akademi Kılavuzu</h2></div>
+              <div className="flex items-center gap-3 mb-3"><Compass className="w-6 h-6 text-cyan-400" /><h2 className="text-2xl font-black">📖 Akademi Kılavuzu</h2></div>
               <p className="text-xs text-slate-400 leading-relaxed">Kelime Oyunu, klasik ezber yöntemlerini geride bırakarak modern öğrenme teorilerini oyunlaştırma mekanikleriyle harmanlar.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
