@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__) )
 # 1. SQLITE VERİTABANI BAĞLANTI YAPILANDIRMASI
 DATABASE_URL = f"sqlite:///{os.path.join(current_dir, 'kelime_oyunu.db')}"
 
@@ -221,6 +221,10 @@ def hata_kelime_ekle(kelime: HataKelimeCreate, kullanici_id: int, db: Session = 
 @app.get("/api/hata-defteri", response_model=List[HataKelimeResponse])
 def hata_defteri_listele(kullanici_id: int, db: Session = Depends(get_db)):
     return db.query(HataDefteri).filter(HataDefteri.kullanici_id == kullanici_id).order_by(HataDefteri.id.desc()).all()
+
+@app.get("/api")
+def root():
+    return {"status": "API online ve tıkır tıkır çalışıyor!"}
 
 @app.delete("/api/hata-defteri/{kelime_id}")
 def hata_kelime_sil(kelime_id: int, kullanici_id: int, db: Session = Depends(get_db)):
