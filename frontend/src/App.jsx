@@ -698,7 +698,7 @@ export default function App() {
             <div className={`rounded-3xl border shadow-xl overflow-hidden ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className={`p-5 border-b flex justify-between items-center ${darkMode ? 'bg-[#0f172a]/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <div>
-                  <h2 className="text-md font-black">🏆 MySQL Canlı Global Sıralama Arenası</h2>
+                  <h2 className="text-md font-black">🏆 Canlı Global Sıralama</h2>
                   <p className="text-xs text-slate-400 mt-0.5">Sistemde kayıtlı tüm kullanıcıların anlık veritabanı skor listesi</p>
                 </div>
                 <div className="text-xs font-bold text-slate-400">Senin Sıran: <span className="text-cyan-400 font-black">#{myRank}</span></div>
