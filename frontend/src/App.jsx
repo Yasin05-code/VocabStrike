@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios'; // API istekleri için axios doğrudan burada kullanılıyor
 import Auth from './components/Auth';
-import { getWords, getHataDefteri, addHataKelime, deleteHataKelime, addXp, getLiveLeaderboard } from './api';
 import { Layers, Trophy, BookOpen, LogOut, HelpCircle, ArrowRight, CheckCircle2, XCircle, RotateCcw, Award, Plus, Trash2, GraduationCap, Flame, Target, TrendingUp, Sparkles, Sun, Moon, Volume2, Timer, Compass, ShieldCheck, Zap, X } from 'lucide-react';
+
+// 🎯 CANLI BACKEND ADRESİNİZ DOĞRUDAN KÖKTE TANIMLI
+const API_BASE_URL = "https://vocabstrike-backend.onrender.com";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -25,7 +28,7 @@ export default function App() {
 
   // Animasyon ve Seçenek Durumları
   const [isFlipped, setIsFlipped] = useState(false);
-  const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | 'revealed'
+  const [feedback, setFeedback] = useState(null); 
   const [options, setOptions] = useState([]);
   const [selectedOption, setSelectedOption] = useState(null);
 
@@ -40,7 +43,7 @@ export default function App() {
   // CANLI DATABASE LEADERBOARD DURUMU
   const [liveLeaderboard, setLiveLeaderboard] = useState([]);
 
-  // 🎖️ MODÜL 4: ROZET VE BAŞARIM SİSTEMİ (SIMULATED LOCAL STORAGE)
+  // 🎖️ MODÜL 4: ROZET VE BAŞARIM SİSTEMİ
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   
   const achievementsList = [
@@ -50,7 +53,28 @@ export default function App() {
     { id: 'word_collector', title: 'Kelime Koleksiyoneri', desc: 'Hata defterinde veya sözlüğünde 5 kelime barındır.', icon: '📚', color: 'from-emerald-500 to-teal-500' }
   ];
 
-  // Hata defteri, sıralama ve başarımları tetikle
+  // 🛠️ DAHLİ ENTEGRE API MOTORLARI
+  const loadHataDefteri = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/hata-defteri?kullanici_id=${user.id}`);
+      setHataKelimeleri(res.data);
+      if (res.data.length >= 5) {
+        unlockBadge('word_collector');
+      }
+    } catch (err) {
+      console.error("Hata defteri yüklenemedi", err);
+    }
+  };
+
+  const loadLiveLeaderboard = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/leaderboard`);
+      setLiveLeaderboard(res.data);
+    } catch (err) {
+      console.error("Canlı sıralama çekilemedi", err);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       loadHataDefteri();
@@ -60,7 +84,6 @@ export default function App() {
     }
   }, [user, activeTab]);
 
-  // ⏰ SAYAÇ ALGORİTMASI SÜREÇ YÖNETİMİ
   useEffect(() => {
     if (gameStarted && !gameFinished && gameSetup.timed && !feedback) {
       setTimeLeft(10);
@@ -77,27 +100,6 @@ export default function App() {
     }
     return () => clearInterval(timerRef.current);
   }, [gameStarted, currentIndex, feedback, gameSetup.timed]);
-
-  const loadHataDefteri = async () => {
-    try {
-      const res = await getHataDefteri(user.id);
-      setHataKelimeleri(res.data);
-      if (res.data.length >= 5) {
-        unlockBadge('word_collector');
-      }
-    } catch (err) {
-      console.error("Hata defteri yüklenemedi", err);
-    }
-  };
-
-  const loadLiveLeaderboard = async () => {
-    try {
-      const res = await getLiveLeaderboard();
-      setLiveLeaderboard(res.data);
-    } catch (err) {
-      console.error("Canlı sıralama veritabanından çekilemedi", err);
-    }
-  };
 
   const unlockBadge = (badgeId) => {
     setUnlockedAchievements((prev) => {
@@ -118,16 +120,11 @@ export default function App() {
   const handleSpeak = (e) => {
     e.stopPropagation();
     if (!words[currentIndex]) return;
-    
     const utterance = new SpeechSynthesisUtterance(words[currentIndex].ingilizce);
     utterance.lang = 'en-US';
     utterance.rate = 0.85;
     window.speechSynthesis.speak(utterance);
   };
-
-  if (!user) {
-    return <Auth onLoginSuccess={(userData) => setUser(userData)} />;
-  }
 
   const generateOptions = (currentWord, allWords) => {
     const correct = gameSetup.dir === 'en_to_tr' ? currentWord.turkce : currentWord.ingilizce;
@@ -158,7 +155,7 @@ export default function App() {
         }
         sessionWords = [...hataKelimeleri].sort(() => 0.5 - Math.random()).slice(0, gameSetup.count);
       } else {
-        const res = await getWords(gameSetup.level, gameSetup.count);
+        const res = await axios.get(`${API_BASE_URL}/api/words?level=${gameSetup.level}&count=${gameSetup.count}`);
         if (res.data.length === 0) {
           alert('Bu seviyede sistemde kelime bulunamadı!');
           return;
@@ -192,7 +189,7 @@ export default function App() {
 
   const kaydetHataListesine = async (wordObj) => {
     try {
-      await addHataKelime(user.id, {
+      await axios.post(`${API_BASE_URL}/api/hata-defteri?kullanici_id=${user.id}`, {
         ingilizce: wordObj.ingilizce,
         turkce: wordObj.turkce,
         seviye: wordObj.seviye || 'A1'
@@ -213,7 +210,12 @@ export default function App() {
       }
     } else {
       try {
-        const res = await addXp(user.id, gameSetup.level, score, sessionWrongCount);
+        const res = await axios.post(`${API_BASE_URL}/api/user/add-xp`, { 
+          kullanici_id: user.id, 
+          level: gameSetup.level, 
+          dogru_sayisi: score, 
+          yanlis_sayisi: sessionWrongCount 
+        });
         setGainedXpThisSession(res.data.kazanilan_xp);
         setUser({ ...user, xp: res.data.new_xp });
       } catch (err) {
@@ -278,7 +280,7 @@ export default function App() {
     e.preventDefault();
     if (!newWord.ingilizce || !newWord.turkce) return;
     try {
-      await addHataKelime(user.id, newWord);
+      await axios.post(`${API_BASE_URL}/api/hata-defteri?kullanici_id=${user.id}`, newWord);
       setNewWord({ ingilizce: '', turkce: '', seviye: 'A1' });
       loadHataDefteri();
       alert('Kelime başarıyla kaydedildi!');
@@ -290,12 +292,16 @@ export default function App() {
   const handleDeleteWord = async (id) => {
     if (!confirm('Bu kelimeyi silmek istiyor musunuz?')) return;
     try {
-      await deleteHataKelime(id, user.id);
+      await axios.delete(`${API_BASE_URL}/api/hata-defteri/${id}?kullanici_id=${user.id}`);
       loadHataDefteri();
     } catch (err) {
       alert('Silme işlemi başarısız.');
     }
   };
+
+  if (!user) {
+    return <Auth onLoginSuccess={(userData) => setUser(userData)} />;
+  }
 
   // 🏆 LİG VE SEVİYE HESAPLAMA SİHİRBAZI
   const currentXp = user?.xp || 0;
@@ -337,7 +343,7 @@ export default function App() {
               />
             </div>
             <div>
-              <h1 className="text-base font-black tracking-widest uppercase bg-linear-to-r from-red-500 to-indigo-500 bg-clip-text text-transparent">
+              <h1 className="text-base font-black tracking-widest uppercase bg-gradient-to-r from-red-500 to-indigo-500 bg-clip-text text-transparent">
                 VOCABSTRIKE
               </h1>
               <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${darkMode ? 'text-cyan-400' : 'text-indigo-600'}`}>VERSION v1.0</p>
@@ -387,7 +393,7 @@ export default function App() {
       {/* MERKEZİ SAHA */}
       <div className="flex-1 p-6 md:p-10 max-w-5xl mx-auto w-full overflow-y-auto relative">
         
-        {/* ==================== MOUSE ILE TIKLAYINCA AÇILAN POP-UP PENCERELERİ (MODALS) ==================== */}
+        {/* ==================== POP-UP PENCERELERİ (MODALS) ==================== */}
         {showXpInfo && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" onClick={() => setShowXpInfo(false)}>
             <div className={`p-6 rounded-2xl border shadow-2xl max-w-md w-full space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
@@ -471,7 +477,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* ⏰ MODÜL 2: SÜRELİ MOD SWITCHER EKLEMESİ */}
                 <div className={`p-4 rounded-2xl border flex items-center justify-between ${darkMode ? 'bg-[#0f172a]/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div>
                     <label className="text-[11px] font-black text-slate-400 block uppercase tracking-widest">Zamana Karşı Yarış Modu (10sn)</label>
@@ -493,7 +498,7 @@ export default function App() {
                 </button>
               </div>
             ) : gameFinished ? (
-              /* SEANS SONU ANALİZİ VE GRAFİK PARKI */
+              /* SEANS SONU ANALİZİ */
               <div className={`p-10 rounded-3xl border shadow-2xl text-center space-y-10 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="flex justify-center"><div className="p-4 bg-emerald-500/10 text-emerald-400 rounded-full"><Award className="w-12 h-12" /></div></div>
                 <div className="space-y-1">
@@ -501,7 +506,6 @@ export default function App() {
                   <p className="text-slate-400 text-xs">Puan dengeniz ve kelime verileriniz veritabanına asenkron olarak yazıldı.</p>
                 </div>
 
-                {/* PROGRESS GRAPH BAR */}
                 <div className={`p-6 rounded-2xl border max-w-xl mx-auto space-y-4 ${darkMode ? 'bg-[#0f172a]/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div>
                     <div className="flex justify-between text-[11px] font-black uppercase tracking-wider text-slate-400">
@@ -528,8 +532,6 @@ export default function App() {
             ) : (
               /* CANLI OYUN ARENASI */
               <div className="space-y-6">
-                
-                {/* ⏰ CANLI SÜRE GÖSTERGE BAR BAR (COUNTDOWN) */}
                 {gameSetup.timed && (
                   <div className={`p-3 rounded-xl border flex items-center justify-between transition-all ${timeLeft <= 3 ? 'bg-red-500/10 border-red-500/30 text-red-400 animate-pulse' : darkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
@@ -543,8 +545,6 @@ export default function App() {
                 {/* 3D KART TASARIMI */}
                 <div className="w-full h-64 perspective-1000 cursor-pointer group" onClick={() => !feedback && setIsFlipped(!isFlipped)}>
                   <div className={`w-full h-full duration-500 transform-style-3d relative ${isFlipped ? 'rotate-y-180' : ''}`}>
-                    
-                    {/* ÖN YÜZ (SORU KARTI - 🎯 AYDINLIK/GECE UYUMLU AÇIK LACİVERT GÜNCELLEMESİ) */}
                     <div className={`absolute w-full h-full backface-hidden p-8 rounded-3xl border shadow-2xl flex flex-col justify-between items-center transition-all duration-300 bg-[#1e293b] border-slate-700 shadow-slate-400/30`}>
                       <div className="w-full flex justify-between items-center border-b pb-3 border-slate-700/50">
                         <span className="text-[9px] font-black px-2.5 py-1 rounded-md border uppercase bg-slate-900/40 text-cyan-300 border-slate-700">Soru {currentIndex + 1} / {words.length}</span>
@@ -568,26 +568,21 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* ARKA YÜZ */}
                     <div className={`absolute w-full h-full backface-hidden p-8 rounded-3xl border-2 shadow-2xl flex flex-col justify-between items-center rotate-y-180 ${darkMode ? 'bg-linear-to-br from-[#1e293b] to-[#131c2e] border-slate-700' : 'bg-linear-to-br from-slate-100 to-white border-slate-300'}`}>
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">💡 Kelimenin Karşılığı</span>
-                      
                       <div className="text-center">
                         <div className="text-3xl font-black text-indigo-500 dark:text-indigo-400 tracking-wide">{backText}</div>
                       </div>
-
                       <div className={`w-full border p-3 rounded-xl text-center shadow-inner ${darkMode ? 'bg-[#0f172a]/60 border-slate-800/40' : 'bg-slate-50 border-slate-200'}`}>
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-0.5 tracking-wider">🌐 Cümle İçi Kullanımı (Canlı Sözlük API)</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-0.5 tracking-wider">🌐 Cümle İçi Kullanımı</p>
                         <p className={`text-xs font-medium italic leading-relaxed ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                           "{words[currentIndex]?.ornek_cumle || 'Örnek cümle havuzda aranamadı.'}"
                         </p>
                       </div>
                     </div>
-
                   </div>
                 </div>
 
-                {/* FEEDBACK ROW */}
                 {feedback && (
                   <div className={`p-4 rounded-xl flex items-center gap-3 font-bold border text-xs shadow-md ${feedback === 'correct' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
                     {feedback === 'correct' ? <><CheckCircle2 className="w-4 h-4" /> Harika! Doğru veri eşleşmesi sağlandı.</> : <><XCircle className="w-4 h-4" /> Hatalı Seçim! Kelime hata defterinize eklendi.</>}
@@ -619,7 +614,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* BOTTOM CONTROL GRID */}
                 <div className={`flex justify-between items-center p-4 border rounded-2xl ${darkMode ? 'bg-[#1e293b]/20 border-slate-800' : 'bg-white border-slate-200'}`}>
                   <div className="text-xs font-bold uppercase">Test Skoru: <span className="text-cyan-400 font-black">{score} / {words.length}</span></div>
                   <div className="flex gap-2">
@@ -632,13 +626,10 @@ export default function App() {
           </div>
         )}
 
-        {/* SEKME 2: CANLI SIRALAMA & LİG PANORAMASI */}
+        {/* SEKME 2: CANLI SIRALAMA */}
         {activeTab === 'lig' && (
           <div className="space-y-6">
-            
-            {/* 3D ETKİLEŞİMLİ SKOR VE LİG KARTLARI (MOUSE ILE TIKLAYINCA BILGI ACAN ALAN) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* KUTU 1: XP SİSTEMİ BİLGİLENDİRME KUTUSU */}
               <div onClick={() => setShowXpInfo(true)} className={`p-5 rounded-2xl border shadow-xl flex items-center justify-between cursor-pointer transform hover:scale-[1.01] transition-all relative overflow-hidden group border-amber-500/20 ${darkMode ? 'bg-linear-to-br from-[#1e293b] to-[#121b2d]' : 'bg-white'}`}>
                 <div className="flex items-center gap-4">
                   <div className="bg-amber-500/10 p-3 rounded-xl text-amber-400 group-hover:animate-bounce"><Zap className="w-6 h-6" /></div>
@@ -647,7 +638,6 @@ export default function App() {
                 <div className="text-[10px] bg-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md font-black uppercase tracking-tighter animate-pulse">Formülü Gör 🔍</div>
               </div>
 
-              {/* KUTU 2: LİG SİSTEMİ BİLGİLENDİRME KUTUSU */}
               <div onClick={() => setShowLeagueInfo(true)} className={`p-5 rounded-2xl border shadow-xl flex items-center justify-between cursor-pointer transform hover:scale-[1.01] transition-all relative overflow-hidden group border-cyan-500/20 ${darkMode ? 'bg-linear-to-br from-[#1e293b] to-[#121b2d]' : 'bg-white'}`}>
                 <div className="flex items-center gap-4">
                   <div className="bg-cyan-500/10 p-3 rounded-xl text-cyan-400 text-2xl group-hover:scale-110 duration-200">{leagueBadge}</div>
@@ -660,7 +650,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* İLERLEME GÖSTERGESİ (PROGRESS BAR) */}
             <div className={`p-6 rounded-3xl border shadow-xl space-y-3 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex justify-between items-center text-xs font-black uppercase tracking-wider text-slate-400">
                 <span>Sonraki Rütbe Aşama İlerlemesi</span>
@@ -675,9 +664,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* ROZETLER VİTRİNİ */}
             <div className={`p-6 rounded-3xl border shadow-xl space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <h3 className="text-xs font-black uppercase tracking-wider">🎖️ Kazanılan Akademi Başarı Rozetleriniz</h3>
+              <h3 className="text-xs font-black uppercase tracking-wider">🎖 Imal Edilen Akademi Başarı Rozetleriniz</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {achievementsList.map((badge) => {
                   const isUnlocked = unlockedAchievements.includes(badge.id);
@@ -694,11 +682,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* LIVE LEADERBOARD TABLOSU */}
             <div className={`rounded-3xl border shadow-xl overflow-hidden ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className={`p-5 border-b flex justify-between items-center ${darkMode ? 'bg-[#0f172a]/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                 <div>
-                  <h2 className="text-md font-black">🏆 Canlı Global Sıralama</h2>
+                  <h2 className="text-md font-black">🏆 MySQL Canlı Global Sıralama Arenası</h2>
                   <p className="text-xs text-slate-400 mt-0.5">Sistemde kayıtlı tüm kullanıcıların anlık veritabanı skor listesi</p>
                 </div>
                 <div className="text-xs font-bold text-slate-400">Senin Sıran: <span className="text-cyan-400 font-black">#{myRank}</span></div>
@@ -742,7 +729,7 @@ export default function App() {
               </form>
             </div>
             <div className={`rounded-3xl border shadow-xl overflow-hidden ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="p-6 bg-[#0f172a]/40 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-sm font-black">📚 Aktif Zayıf Bellek Hücreleri (Hatalı Kelimeler)</h2><span className="text-xs text-slate-400">Toplam: {hataKelimeleri.length} Kelime</span></div>
+              <div className="p-6 bg-[#0f172a]/40 border-b dark:border-slate-800 flex justify-between items-center"><h2 className="text-sm font-black">📚 Aktif Zayıf Bellek Hücreleri</h2><span className="text-xs text-slate-400">Toplam: {hataKelimeleri.length} Kelime</span></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="bg-slate-900/10 text-[10px] text-slate-400 font-black border-b dark:border-slate-800"><th className="p-4">İngilizce</th><th className="p-4">Türkçe</th><th className="p-4">Seviye</th><th className="p-4 text-right">İşlem</th></tr></thead>
@@ -764,17 +751,17 @@ export default function App() {
         {activeTab === 'rehber' && (
           <div className="space-y-6">
             <div className={`p-8 rounded-3xl border shadow-xl ${darkMode ? 'bg-linear-to-br from-[#1e293b] to-[#0f172a] border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-center gap-3 mb-3"><Compass className="w-6 h-6 text-cyan-400" /><h2 className="text-2xl font-black">📖 Kelime Oyunu</h2></div>
-              <p className="text-xs text-slate-400 leading-relaxed">Kelime Oyunu, klasik ezber yöntemlerini geride bırakarak modern öğrenme teorilerini oyunlaştırma mekanikleriyle harmanlar. Bu panel, sistemdeki puanlama, süre kısıtlamaları ve başarı ödüllerinin işleyiş prensipleri hakkında sizi bilgilendirmek amacıyla tasarlanmıştır.</p>
+              <div className="flex items-center gap-3 mb-3"><Compass className="w-6 h-6 text-cyan-400" /><h2 className="text-2xl font-black">📖 Kelime Oyunu Akademi Kılavuzu</h2></div>
+              <p className="text-xs text-slate-400 leading-relaxed">Kelime Oyunu, klasik ezber yöntemlerini geride bırakarak modern öğrenme teorilerini oyunlaştırma mekanikleriyle harmanlar.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className={`p-6 rounded-2xl border shadow-md space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center gap-2 border-b pb-2 dark:border-slate-800"><Zap className="w-5 h-5 text-indigo-400" /><h3 className="text-sm font-black uppercase tracking-wider">⚡ Başarı Puanı (XP) ve Gelişim Algoritması</h3></div>
-                <p className="text-xs text-slate-400 leading-relaxed">Doğru cevaplarınız seçtiğiniz zorluk derecesinin katsayısıyla çarpılarak hanenize eklenirken, hatalı yanıtlarınız da rütbenizden düşürülür. Tüm bu süreçler canlı sunucumuz ile anlık senkronize çalışır.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Doğru cevaplarınız seçtiğiniz zorluk derecesinin katsayısıyla çarpılarak hanenize eklenirken, hatalı yanıtlarınız da rütbenizden düşürülür.</p>
               </div>
               <div className={`p-6 rounded-2xl border shadow-md space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center gap-2 border-b pb-2 dark:border-slate-800"><Timer className="w-5 h-5 text-cyan-400" /><h3 className="text-sm font-black uppercase tracking-wider">⏰ Zamana Karşı Yarış Parametreleri</h3></div>
-                <p className="text-xs text-slate-400 leading-relaxed">Süreli modda 10 saniyelik zaman sınırı bittiğinde sistem soruyu doğrudan "Hatalı" kabul eder. Zaman aşımına uğrayan kelime, daha sonra tekrar edilmek üzere otomatik olarak Hata Defteriniz içerisine şutlanır.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Süreli modda 10 saniyelik zaman sınırı bittiğinde sistem soruyu doğrudan "Hatalı" kabul eder.</p>
               </div>
             </div>
           </div>
