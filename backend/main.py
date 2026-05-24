@@ -5,6 +5,7 @@ import hashlib
 from datetime import datetime
 from typing import List
 import requests
+import os
 
 # Veritabanı ve ORM Araçları
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
@@ -122,18 +123,14 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
 def get_system_words(level: str, count: int = 5, db: Session = Depends(get_db)):
     query = db.query(Kelime)
     
-    # 🧠 Gelen seviye bilgisinin boşluklarını temizleyip büyük harfe çeviriyoruz (Örn: "c1" -> "C1")
     temiz_seviye = level.strip().upper()
     
     if temiz_seviye != "KARIŞIK" and temiz_seviye != "":
-        # Veritabanında hem "C1" hem "c1" olma ihtimaline karşı ikisini de kapsayan filtre
         query = query.filter((Kelime.seviye == temiz_seviye) | (Kelime.seviye == level.strip().lower()))
     
     words = query.all()
     
-    # 🚨 Eğer veritabanında kelimeler "C1" olarak kayıtlıysa ve arayüz hâlâ boş dönüyorsa acil durum koruması
     if not words and temiz_seviye == "C1":
-        # Ne olur ne olmaz, veritabanındaki ilk 100 kelimeyi kontrol amaçlı esnek filtreyle çek
         words = db.query(Kelime).filter(Kelime.seviye.like("%C1%")).all()
 
     if not words:
@@ -178,13 +175,11 @@ def get_system_words(level: str, count: int = 5, db: Session = Depends(get_db)):
         
     return payload
 
-# 🎯 ZORLUĞA GÖRE DOĞRU ORANTILI XP HESAPLAMA MOTORU
 @app.post("/api/user/add-xp")
 def add_user_xp(data: XPUpdateRequest, db: Session = Depends(get_db)):
     user = db.query(Kullanici).filter(Kullanici.id == data.kullanici_id).first()
     if not user: raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
     
-    # CEFR Seviyelerine Göre Çarpan Katsayıları
     katsayi = 1.0
     if data.level == "A2": katsayi = 1.2
     elif data.level == "B1": katsayi = 1.5
@@ -192,14 +187,13 @@ def add_user_xp(data: XPUpdateRequest, db: Session = Depends(get_db)):
     elif data.level == "C1": katsayi = 2.0
     elif data.level == "Karışık": katsayi = 1.4
 
-    # Ana kural: Doğru +100, Yanlış -50 (Katsayı ile çarpılır)
     temel_dogru_xp = 100 * katsayi
     temel_yanlis_xp = -50 * katsayi
 
     toplam_kazanc = int((data.dogru_sayisi * temel_dogru_xp) + (data.yanlis_sayisi * temel_yanlis_xp))
     
     user.xp += toplam_kazanc
-    if user.xp < 0: user.xp = 0 # Kullanıcının puanı sıfırın altına düşmesin
+    if user.xp < 0: user.xp = 0
     
     db.commit()
     db.refresh(user)
@@ -234,3 +228,14 @@ def hata_kelime_sil(kelime_id: int, kullanici_id: int, db: Session = Depends(get
     db.delete(kelime)
     db.commit()
     return {"success": True, "message": "Silindi"}
+
+# 🎯 ==================== BULUT SUNUCU VE CANLI DEPLOY YAPILANDIRMASI ==================== 🎯
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Render.com sunucusunun dinamik atadığı portu okuyoruz, lokalde ise varsayılan 8000 portunu açar
+    canli_port = int(os.environ.get("PORT", 8000))
+    
+    # İnternet ortamında çalışması için host '0.0.0.0' olarak kilitlendi
+    print(f"🚀 VocabStrike API canlıya uçuyor! Port: {canli_port}")
+    uvicorn.run("main:app", host="0.0.0.0", port=canli_port, reload=False)
