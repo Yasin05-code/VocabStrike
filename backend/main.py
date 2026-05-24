@@ -4,21 +4,25 @@ from pydantic import BaseModel
 import hashlib
 from datetime import datetime
 from typing import List
-import requests  # 🌐 Dış API istekleri için eklendi
+import requests
 
 # Veritabanı ve ORM Araçları
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-# 1. VERİTABANI BAĞLANTI YAPILANDIRMASI
-DATABASE_URL = "mysql+mysqlconnector://root:Yasin05kaya.@127.0.0.1/kelime_oyunu"
+# 1. SQLITE VERİTABANI BAĞLANTI YAPILANDIRMASI
+DATABASE_URL = "sqlite:///./kelime_oyunu.db"
 
-engine = create_engine(DATABASE_URL)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# 2. VERİTABANI MODELLERİ (TABLOLAR)
+# 2. VERİTABANI MODELLERİ
 class Kullanici(Base):
     __tablename__ = "kullanicilar"
     id = Column(Integer, primary_key=True, index=True)
@@ -26,6 +30,7 @@ class Kullanici(Base):
     isim = Column(String(50), nullable=False)
     soyisim = Column(String(50), nullable=False)
     sifre = Column(String(256), nullable=False)
+    xp = Column(Integer, default=0) # 🎯 Veritabanında biriken net canlı XP
 
 class Kelime(Base):
     __tablename__ = "kelimeler"
@@ -43,15 +48,15 @@ class HataDefteri(Base):
     seviye = Column(String(10), default="A1")
     eklenme_tarihi = Column(DateTime, default=datetime.utcnow)
 
-# Tabloları MySQL'de otomatik oluştur/güncelle
 Base.metadata.create_all(bind=engine)
+import database
+database.init_db()
 
-# 3. FASTAPI VE GENİŞLETİLMİŞ CORS GÜVENLİK AYARI
-app = FastAPI(title="Kelime Master Pro API", version="2.5")
+app = FastAPI(title="VocabStrike", version="3.8")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Geliştirme aşamasında tarayıcı engellerini tamamen aşmak için tam serbest mod
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,12 +64,9 @@ app.add_middleware(
 
 def get_db():
     db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    try: yield db
+    finally: db.close()
 
-# 4. PYDANTIC MODEL ŞEMALARI
 class LoginRequest(BaseModel):
     kullanici_adi: str
     sifre: str
@@ -86,11 +88,14 @@ class HataKelimeResponse(BaseModel):
     ingilizce: str
     turkce: str
     seviye: str
+    class Config: from_attributes = True
 
-    class Config:
-        from_attributes = True
+class XPUpdateRequest(BaseModel):
+    kullanici_id: int
+    level: str
+    dogru_sayisi: int
+    yanlis_sayisi: int
 
-# 5. ENDPOINT'LER
 @app.get("/api")
 def root():
     return {"status": "API online ve tıkır tıkır çalışıyor!"}
@@ -98,16 +103,9 @@ def root():
 @app.post("/api/auth/register")
 def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
     exists = db.query(Kullanici).filter(Kullanici.kullanici_adi == user_data.kullanici_adi).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten alınmış!")
-    
+    if exists: raise HTTPException(status_code=400, detail="Bu kullanıcı adı zaten alınmış!")
     hashed_password = hashlib.md5(user_data.sifre.encode()).hexdigest()
-    new_user = Kullanici(
-        kullanici_adi=user_data.kullanici_adi,
-        isim=user_data.isim,
-        soyisim=user_data.soyisim,
-        sifre=hashed_password
-    )
+    new_user = Kullanici(kullanici_adi=user_data.kullanici_adi, isim=user_data.isim, soyisim=user_data.soyisim, sifre=hashed_password, xp=0)
     db.add(new_user)
     db.commit()
     return {"success": True, "message": "Kayıt başarıyla tamamlandı."}
@@ -115,28 +113,31 @@ def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/login")
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     hashed_password = hashlib.md5(credentials.sifre.encode()).hexdigest()
-    user = db.query(Kullanici).filter(
-        Kullanici.kullanici_adi == credentials.kullanici_adi,
-        Kullanici.sifre == hashed_password
-    ).first()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="Kullanıcı adı veya şifre hatalı!")
-    
-    return {
-        "success": True,
-        "user": {"id": user.id, "kullanici_adi": user.kullanici_adi, "isim": user.isim, "soyisim": user.soyisim}
-    }
+    user = db.query(Kullanici).filter(Kullanici.kullanici_adi == credentials.kullanici_adi, Kullanici.sifre == hashed_password).first()
+    if not user: raise HTTPException(status_code=400, detail="Kullanıcı adı veya şifre hatalı!")
+    return {"success": True, "user": {"id": user.id, "kullanici_adi": user.kullanici_adi, "isim": user.isim, "soyisim": user.soyisim, "xp": user.xp}}
 
-# 🚀 DIŞ API DESTEKLİ GÜNCELLENMİŞ KELİME GETİRME ENDPOINT'İ
+
 @app.get("/api/words")
 def get_system_words(level: str, count: int = 5, db: Session = Depends(get_db)):
     query = db.query(Kelime)
-    if level != "Karışık" and level != "":
-        query = query.filter(Kelime.seviye == level)
+    
+    # 🧠 Gelen seviye bilgisinin boşluklarını temizleyip büyük harfe çeviriyoruz (Örn: "c1" -> "C1")
+    temiz_seviye = level.strip().upper()
+    
+    if temiz_seviye != "KARIŞIK" and temiz_seviye != "":
+        # Veritabanında hem "C1" hem "c1" olma ihtimaline karşı ikisini de kapsayan filtre
+        query = query.filter((Kelime.seviye == temiz_seviye) | (Kelime.seviye == level.strip().lower()))
     
     words = query.all()
+    
+    # 🚨 Eğer veritabanında kelimeler "C1" olarak kayıtlıysa ve arayüz hâlâ boş dönüyorsa acil durum koruması
+    if not words and temiz_seviye == "C1":
+        # Ne olur ne olmaz, veritabanındaki ilk 100 kelimeyi kontrol amaçlı esnek filtreyle çek
+        words = db.query(Kelime).filter(Kelime.seviye.like("%C1%")).all()
+
     if not words:
+        print(f"⚠️ Uyarı: Veritabanında '{level}' seviyesine ait hiçbir kelime bulunamadı!")
         return []
     
     import random
@@ -147,18 +148,14 @@ def get_system_words(level: str, count: int = 5, db: Session = Depends(get_db)):
         ornek_cumle = "Örnek cümle bulunamadı."
         telaffuz = ""
         
-        # 🌐 Dış Sözlük API'sine anlık tünel açılıyor
         try:
             response = requests.get(f"https://api.dictionaryapi.dev/api/v2/entries/en/{w.ingilizce}", timeout=2)
             if response.status_code == 200:
                 data = response.json()
-                
-                # Fonetik okunuşu (telaffuz simgesini) çek
                 telaffuz = data[0].get("phonetic", "")
                 if not telaffuz and data[0].get("phonetics"):
                     telaffuz = data[0]["phonetics"][0].get("text", "")
                 
-                # İlk bulduğun İngilizce örnek cümleyi çek
                 meanings = data[0].get("meanings", [])
                 for meaning in meanings:
                     for definition in meaning.get("definitions", []):
@@ -168,36 +165,59 @@ def get_system_words(level: str, count: int = 5, db: Session = Depends(get_db)):
                     if ornek_cumle != "Örnek cümle bulunamadı.":
                         break
         except Exception as e:
-            # Dış API servis kesintisi durumunda oyun akışının kopmaması için hata maskeleniyor
-            print(f"Dış API tünel hatası ({w.ingilizce}): {e}")
+            print(f"Dış API hatası ({w.ingilizce}): {e}")
             
         payload.append({
             "id": w.id,
             "ingilizce": w.ingilizce,
             "turkce": w.turkce,
-            "seviye": w.seviye,
+            "seviye": w.seviye.upper(),
             "telaffuz": telaffuz if telaffuz else "/.../",
             "ornek_cumle": ornek_cumle
         })
         
     return payload
 
+# 🎯 ZORLUĞA GÖRE DOĞRU ORANTILI XP HESAPLAMA MOTORU
+@app.post("/api/user/add-xp")
+def add_user_xp(data: XPUpdateRequest, db: Session = Depends(get_db)):
+    user = db.query(Kullanici).filter(Kullanici.id == data.kullanici_id).first()
+    if not user: raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    
+    # CEFR Seviyelerine Göre Çarpan Katsayıları
+    katsayi = 1.0
+    if data.level == "A2": katsayi = 1.2
+    elif data.level == "B1": katsayi = 1.5
+    elif data.level == "B2": katsayi = 1.8
+    elif data.level == "C1": katsayi = 2.0
+    elif data.level == "Karışık": katsayi = 1.4
+
+    # Ana kural: Doğru +100, Yanlış -50 (Katsayı ile çarpılır)
+    temel_dogru_xp = 100 * katsayi
+    temel_yanlis_xp = -50 * katsayi
+
+    toplam_kazanc = int((data.dogru_sayisi * temel_dogru_xp) + (data.yanlis_sayisi * temel_yanlis_xp))
+    
+    user.xp += toplam_kazanc
+    if user.xp < 0: user.xp = 0 # Kullanıcının puanı sıfırın altına düşmesin
+    
+    db.commit()
+    db.refresh(user)
+    return {"success": True, "new_xp": user.xp, "kazanilan_xp": toplam_kazanc}
+
+@app.get("/api/leaderboard")
+def get_live_leaderboard(db: Session = Depends(get_db)):
+    users = db.query(Kullanici).order_by(Kullanici.xp.desc()).limit(10).all()
+    leaderboard = []
+    for idx, u in enumerate(users):
+        leaderboard.append({"rank": idx + 1, "id": u.id, "name": f"{u.isim} {u.soyisim}", "xp": u.xp})
+    return leaderboard
+
 @app.post("/api/hata-defteri", response_model=HataKelimeResponse)
 def hata_kelime_ekle(kelime: HataKelimeCreate, kullanici_id: int, db: Session = Depends(get_db)):
-    mevcut = db.query(HataDefteri).filter(
-        HataDefteri.kullanici_id == kullanici_id,
-        HataDefteri.ingilizce == kelime.ingilizce.strip()
-    ).first()
-    
-    if mevcut:
-        return mevcut
-
-    yeni_hata = HataDefteri(
-        kullanici_id=kullanici_id,
-        ingilizce=kelime.ingilizce.strip(),
-        turkce=kelime.turkce.strip(),
-        seviye=kelime.seviye
-    )
+    mevcut = db.query(HataDefteri).filter(HataDefteri.kullanici_id == kullanici_id, HataDefteri.ingilizce == kelime.ingilizce.strip()).first()
+    if mevcut: return mevcut
+    yeni_hata = HataDefteri(kullanici_id=kullanici_id, ingilizce=kelime.ingilizce.strip(), turkce=kelime.turkce.strip(), seviye=kelime.seviye)
     db.add(yeni_hata)
     db.commit()
     db.refresh(yeni_hata)
@@ -210,8 +230,7 @@ def hata_defteri_listele(kullanici_id: int, db: Session = Depends(get_db)):
 @app.delete("/api/hata-defteri/{kelime_id}")
 def hata_kelime_sil(kelime_id: int, kullanici_id: int, db: Session = Depends(get_db)):
     kelime = db.query(HataDefteri).filter(HataDefteri.id == kelime_id, HataDefteri.kullanici_id == kullanici_id).first()
-    if not kelime:
-        raise HTTPException(status_code=404, detail="Kelime bulunamadı.")
+    if not kelime: raise HTTPException(status_code=404, detail="Kelime bulunamadı.")
     db.delete(kelime)
     db.commit()
     return {"success": True, "message": "Silindi"}

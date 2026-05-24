@@ -1,127 +1,86 @@
-import mysql.connector
-from datetime import datetime
+import sqlite3
+import os
+import json
 
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",          
-    "password": "Yasin05kaya.", # Kendi Workbench şifreni buraya yaz!
-    "database": "kelime_oyunu" 
-}
+DB_FILE = "kelime_oyunu.db"
 
 def get_db_connection():
-    return mysql.connector.connect(**DB_CONFIG)
+    return sqlite3.connect(DB_FILE)
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Kullanıcılar Tablosu
+    # 🚨 Eski harf uzunluğu şemasını tamamen temizliyoruz
+    cursor.execute("DROP TABLE IF EXISTS kelimeler")
+    
+    # Tabloları oluştur
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS kullanicilar (
-            kullanici_adi VARCHAR(50) PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kullanici_adi VARCHAR(50) UNIQUE NOT NULL,
             isim VARCHAR(50) NOT NULL,
             soyisim VARCHAR(50) NOT NULL,
-            sifre VARCHAR(64) NOT NULL,
-            haftalik_soru INT DEFAULT 0,
-            haftalik_dogru INT DEFAULT 0,
-            en_yuksek_streak INT DEFAULT 0
+            sifre VARCHAR(256) NOT NULL,
+            xp INTEGER DEFAULT 0
         )
     ''')
     
-    # Kelimeler Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS kelimeler (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             ingilizce VARCHAR(100) UNIQUE,
             turkce VARCHAR(100),
             seviye VARCHAR(10)
         )
     ''')
     
-    # Hata Sözlüğü Tablosu
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS hata_sozlugu (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            kullanici_adi VARCHAR(50),
+        CREATE TABLE IF NOT EXISTS hata_defteri (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kullanici_id INTEGER,
             ingilizce VARCHAR(100),
             turkce VARCHAR(100),
-            UNIQUE KEY uq_user_word (kullanici_adi, ingilizce),
-            FOREIGN KEY (kullanici_adi) REFERENCES kullanicilar(kullanici_adi) ON DELETE CASCADE
+            seviye VARCHAR(10) DEFAULT 'A1',
+            eklenme_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # Haftalık Skorlar Tablosu
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS haftalik_skorlar (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            kullanici_adi VARCHAR(50),
-            yil INT,
-            hafta_no INT,
-            soru_sayisi INT,
-            dogru_sayisi INT,
-            FOREIGN KEY (kullanici_adi) REFERENCES kullanicilar(kullanici_adi) ON DELETE CASCADE
-        )
-    ''')
-
-    # Sistem Ayarları
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sistem_ayarlari (
-            ayar_anahtar VARCHAR(50) PRIMARY KEY,
-            ayar_deger VARCHAR(50)
-        )
-    ''')
+    # 🎯 YENİ HİYERARŞİK JSON OKUMA MOTORU
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    JSON_DOSYA_YOLU = os.path.join(current_dir, "words.json")
     
-    # Eğer kelimeler tablosu boşsa ilk kelimeleri enjekte et
-    cursor.execute("SELECT COUNT(*) FROM kelimeler")
-    if cursor.fetchone()[0] == 0:
-        hazir_kelimeler = [
-            ("also", "ayrıca", "A1"), ("mistake", "hata", "A1"), ("discover", "keşfetmek", "A1"), 
-            ("even", "hatta", "A1"), ("decision", "karar", "A1"), ("between", "arasında", "A1"),
-            ("whole", "tüm", "A1"), ("tale", "masal", "A1"), ("cheap", "ucuz", "A1"), ("price", "fiyat", "A1"),
-            ("seriously", "cidden", "A2"), ("amongst", "arasında", "A2"), ("adventure", "macera", "A2"),
-            ("common", "yaygın", "A2"), ("imagine", "hayal etmek", "A2"), ("protect", "korumak", "A2"),
-            ("discuss", "tartışmak", "A2"), ("reason", "sebep", "A2"), ("move", "hareket etmek", "A2"), ("wish", "dilek", "A2"),
-            ("brilliant", "muhteşem", "B1"), ("criminal", "suçlu", "B1"), ("escalator", "yürüyen merdiven", "B1"),
-            ("confident", "kendinden emin", "B1"), ("vanished", "ortadan kaybolmak", "B1"), ("facility", "tesis", "B1"),
-            ("independent", "bağımsız", "B1"), ("gather", "toplamak", "B1"), ("accurate", "doğru", "B1"), ("blame", "suçlamak", "B1"),
-            ("expectations", "beklenti", "B2"), ("critics", "eleştirmenler", "B2"), ("treatment", "tedavi", "B2"),
-            ("imaginative", "yaratıcı", "B2"), ("legacy", "miras", "B2"), ("dreadful", "korkunç", "B2"),
-            ("appreciate", "takdir etmek", "B2"), ("embarrass", "utanmak", "B2"), ("assume", "farz etmek", "B2"), ("flawless", "kusursuz", "B2"),
-            ("hubris", "kibir", "C1"), ("delicate", "hassas", "C1"), ("miserable", "sefil", "C1"),
-            ("colleague", "iş arkadaşı", "C1"), ("delegate", "temsilci", "C1"), ("disgust", "iğrençlik", "C1"),
-            ("widespread", "yaygın/çaplı", "C1"), ("deny", "inkar etmek", "C1"), ("threaten", "tehdit etmek", "C1"), ("achieve", "başarmak", "C1")
-        ]
-        cursor.executemany("INSERT IGNORE INTO kelimeler (ingilizce, turkce, seviye) VALUES (%s, %s, %s)", hazir_kelimeler)
-        
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-def check_weekly_reset():
-    su_an = datetime.now()
-    mevcut_yil = su_an.year
-    mevcut_hafta = su_an.isocalendar()[1]
-    mevcut_kod = f"{mevcut_yil}-{mevcut_hafta}"
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT ayar_deger FROM sistem_ayarlari WHERE ayar_anahtar = 'son_sifirlama_haftasi'")
-    row = cursor.fetchone()
-    
-    if not row:
-        cursor.execute("INSERT INTO sistem_ayarlari (ayar_anahtar, ayar_deger) VALUES ('son_sifirlama_haftasi', %s)", (mevcut_kod,))
-        conn.commit()
-    else:
-        son_kod = row[0]
-        if son_kod != mevcut_kod:
-            cursor.execute("""
-                INSERT INTO haftalik_skorlar (kullanici_adi, yil, hafta_no, soru_sayisi, dogru_sayisi)
-                SELECT kullanici_adi, %s, %s, haftalik_soru, haftalik_dogru FROM kullanicilar WHERE haftalik_soru > 0
-            """, (mevcut_yil, mevcut_hafta))
-            cursor.execute("UPDATE kullanicilar SET haftalik_soru = 0, haftalik_dogru = 0")
-            cursor.execute("UPDATE sistem_ayarlari SET ayar_deger = %s WHERE ayar_anahtar = 'son_sifirlama_haftasi'", (mevcut_kod,))
-            conn.commit()
+    if os.path.exists(JSON_DOSYA_YOLU):
+        try:
+            with open(JSON_DOSYA_YOLU, "r", encoding="utf-8") as f:
+                seviyeli_liste = json.load(f) # Gelen format: {"A1": [...], "A2": [...]}
             
+            enjekte_verisi = []
+            
+            # Sözlükteki her bir seviye grubunu ("A1", "A2", "B1", "B2") tek tek dönüyoruz
+            for seviye_anahtari, kelime_listesi in seviyeli_liste.items():
+                print(f"📦 {seviye_anahtari} kategorisinden kelimeler ayıklanıyor...")
+                
+                for item in kelime_listesi:
+                    ing = item.get("en", "").strip().lower()
+                    tur = item.get("tr", "").strip().lower()
+                    
+                    if ing and tur:
+                        # Harf sayısına bakmaksızın JSON'daki gerçek seviyeyi (A1, B2 vs.) yazıyoruz
+                        enjekte_verisi.append((ing, tur, seviye_anahtari.strip().upper()))
+            
+            # Veritabanına mükemmel toplu enjeksiyon
+            cursor.executemany(
+                "INSERT OR IGNORE INTO kelimeler (ingilizce, turkce, seviye) VALUES (?, ?, ?)", 
+                enjekte_verisi
+            )
+            print(f"🎯 MÜKEMMEL BAŞARI: Toplam {len(enjekte_verisi)} adet kelime GERÇEK SEVİYELERİYLE SQLite'a mühürlendi!")
+            
+        except Exception as e:
+            print("❌ Yeni JSON yapısı ayrıştırılırken hata oluştu:", e)
+    else:
+        print("⚠️ Kritik Hata: Güncel words.json dosyası backend klasöründe bulunamadı!")
+
+    conn.commit()
     cursor.close()
     conn.close()

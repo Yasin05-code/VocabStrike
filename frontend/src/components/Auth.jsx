@@ -34,7 +34,7 @@ export default function Auth({ onLoginSuccess }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4" style={{ fontFamily: 'sans-serif' }}>
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 max-w-md w-full">
-        <h2 className="text-3xl font-extrabold text-center mb-6 text-indigo-600">⚡ KELİME MASTER PRO</h2>
+        <h2 className="text-3xl font-extrabold text-center mb-6 text-indigo-600">VocabStrike</h2>
         
         <div className="flex border-b border-slate-200 mb-6">
           <button type="button" className={`w-1/2 pb-3 font-semibold text-sm ${isLogin ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-400'}`} onClick={() => setIsLogin(true)}>🔒 Giriş Yap</button>
