@@ -770,7 +770,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className={`p-6 rounded-2xl border shadow-md space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center gap-2 border-b pb-2 dark:border-slate-800"><Zap className="w-5 h-5 text-indigo-400" /><h3 className="text-sm font-black uppercase tracking-wider">⚡ Başarı Puanı (XP) ve Gelişim Algoritması</h3></div>
-                <p className="text-xs text-slate-400 leading-relaxed">Doğru cevaplarınız seçtiğiniz zorluk derecesinin katsayısıyla çarpılarak hanenize eklenirken, hatalı yanıtlarınız da rütbenizden düşürülür. Tüm bu süreçler MySQL canlı sunucunuz ile anlık senkronize çalışır.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Doğru cevaplarınız seçtiğiniz zorluk derecesinin katsayısıyla çarpılarak hanenize eklenirken, hatalı yanıtlarınız da rütbenizden düşürülür. Tüm bu süreçler canlı sunucumuz ile anlık senkronize çalışır.</p>
               </div>
               <div className={`p-6 rounded-2xl border shadow-md space-y-4 ${darkMode ? 'bg-[#1e293b] border-slate-800' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center gap-2 border-b pb-2 dark:border-slate-800"><Timer className="w-5 h-5 text-cyan-400" /><h3 className="text-sm font-black uppercase tracking-wider">⏰ Zamana Karşı Yarış Parametreleri</h3></div>
